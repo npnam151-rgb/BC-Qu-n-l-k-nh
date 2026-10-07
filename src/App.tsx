@@ -53,7 +53,7 @@ export default function App() {
   };
 
   // Lưu Báo cáo Quản lý kênh vào Google Sheets (sheet "BC QL kênh" tại 2 file)
-  const saveChannelReportToGoogleSheets = async (data: ChannelManagerReportData) => {
+  const saveChannelReportToGoogleSheets = async (data: ChannelManagerReportData): Promise<boolean> => {
     const payload = {
       sheetName: "BC QL kênh",
       date: data.date,
@@ -74,26 +74,49 @@ export default function App() {
       return false;
     }
 
+    const payloadString = JSON.stringify(payload);
+
     try {
       setSheetStatus('saving');
+
+      // Trên iOS Safari / WebKit: keepalive: true ngăn trình duyệt hủy kết nối nền
       const fetchPromise = fetch(GOOGLE_SHEET_WEBHOOK_URL, {
         method: 'POST',
         mode: 'no-cors',
+        cache: 'no-cache',
+        credentials: 'omit',
+        redirect: 'follow',
+        keepalive: true,
         headers: {
           'Content-Type': 'text/plain;charset=utf-8',
         },
-        body: JSON.stringify(payload),
+        body: payloadString,
       });
 
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 8000)
+        setTimeout(() => reject(new Error('Timeout')), 7000)
       );
 
       await Promise.race([fetchPromise, timeoutPromise]);
       setSheetStatus('success');
       return true;
     } catch (error) {
-      console.error("Lỗi khi lưu Quản lý kênh vào Google Sheets:", error);
+      console.warn("fetch gặp lỗi hoặc timeout, kích hoạt sendBeacon fallback...", error);
+      
+      // Fallback 1 cho iOS Safari / WebKit: sendBeacon miễn nhiễm với việc hủy request
+      try {
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+          const blob = new Blob([payloadString], { type: 'text/plain;charset=utf-8' });
+          const sent = navigator.sendBeacon(GOOGLE_SHEET_WEBHOOK_URL, blob);
+          if (sent) {
+            setSheetStatus('success');
+            return true;
+          }
+        }
+      } catch (beaconErr) {
+        console.warn("sendBeacon fallback lỗi:", beaconErr);
+      }
+
       setSheetStatus('error');
       return false;
     }
@@ -214,32 +237,38 @@ export default function App() {
       setModalImageUrl(dataUrl);
       setModalFileName(fileName);
 
-      const isMobile = typeof navigator !== 'undefined' && (
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Zalo/i.test(navigator.userAgent) || 
+      // 1. Lưu dữ liệu lên Google Sheets và AWAIT hoàn tất để iOS WebKit không ngắt kết nối
+      await saveChannelReportToGoogleSheets(channelData);
+
+      // 2. Kiểm tra thiết bị iOS / Mobile
+      const isIOS = typeof navigator !== 'undefined' && (
+        /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
       );
+      const isMobile = isIOS || (typeof navigator !== 'undefined' && /Android|webOS|BlackBerry|IEMobile|Opera Mini|Zalo/i.test(navigator.userAgent));
       const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 
       let downloadTriggered = false;
-      try {
-        const link = document.createElement('a');
-        link.download = fileName;
-        link.href = dataUrl;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        downloadTriggered = true;
-      } catch (downloadErr) {
-        console.warn('Direct download click failed or blocked:', downloadErr);
-        downloadTriggered = false;
+      // Trên iOS Safari: KHÔNG kích hoạt link.click() vì Safari sẽ coi đó là điều hướng hủy fetch mạng
+      // Thay vào đó modal sẽ mở ngay lập tức để người dùng chạm giữ lưu ảnh vào Album
+      if (!isIOS) {
+        try {
+          const link = document.createElement('a');
+          link.download = fileName;
+          link.href = dataUrl;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          downloadTriggered = true;
+        } catch (downloadErr) {
+          console.warn('Direct download click failed or blocked:', downloadErr);
+          downloadTriggered = false;
+        }
       }
 
       setIsBlockedWarning(!downloadTriggered || isMobile || isIframe);
       setIsModalOpen(true);
       setExportSuccess(true);
-
-      // Lưu Google Sheets trong nền (vào 2 file theo cấu hình Apps Script)
-      saveChannelReportToGoogleSheets(channelData);
 
     } catch (err) {
       console.error('Failed to export report', err);
