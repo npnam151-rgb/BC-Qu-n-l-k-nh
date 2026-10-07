@@ -1,0 +1,8 @@
+{
+  "name": "Cs báo cáo quản lý kênh",
+  "description": "Ứng dụng tạo báo cáo trải nghiệm khách hàng dạng ảnh cho nhân viên quán bia.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
