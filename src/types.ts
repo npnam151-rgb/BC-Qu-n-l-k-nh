@@ -62,12 +62,31 @@ export interface ChannelManagerReportData {
   proposal: string; // Đề xuất (chung)
 }
 
-export const createDefault5Sales = (): SaleRepData[] => {
+export const isSaleActive = (sale: SaleRepData): boolean => {
+  return Boolean(sale.salesRepName && sale.salesRepName.trim() !== '');
+};
+
+export const clearAllSaleRepStorage = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('ql_kenh_manager_name');
+    localStorage.removeItem('ql_kenh_sales_rep');
+    for (let i = 1; i <= 50; i++) {
+      localStorage.removeItem(`ql_sale_rep_${i}`);
+    }
+  }
+};
+
+export const createDefault5Sales = (clearStorage: boolean = false): SaleRepData[] => {
+  if (clearStorage) {
+    clearAllSaleRepStorage();
+  }
   return [1, 2, 3, 4, 5].map((id) => {
-    const savedName = typeof window !== 'undefined' ? localStorage.getItem(`ql_sale_rep_${id}`) || '' : '';
+    const savedName = (!clearStorage && typeof window !== 'undefined') 
+      ? localStorage.getItem(`ql_sale_rep_${id}`) || '' 
+      : '';
     return {
       id,
-      salesRepName: savedName || `Sale ${id}`,
+      salesRepName: savedName,
       visitedCount: '',
       newCustomers: '',
       ordersCount: '',

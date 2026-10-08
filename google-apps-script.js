@@ -86,17 +86,41 @@ function doPost(e) {
       var commonMarket = data.marketIssues || "";
       var commonProposal = data.proposal || "";
 
-      // Danh sách 5 sale gửi từ form quản lý
-      var salesList = (data.sales && Array.isArray(data.sales) && data.sales.length > 0)
+      // Danh sách sale gửi từ form quản lý
+      var rawSalesList = (data.sales && Array.isArray(data.sales) && data.sales.length > 0)
         ? data.sales
         : (data.salesList && Array.isArray(data.salesList) && data.salesList.length > 0)
           ? data.salesList
           : [data];
 
-      var rows5 = [];
-      for (var i = 0; i < salesList.length; i++) {
-        var s = salesList[i];
-        // Đảm bảo luôn luôn có Tên NV Sale (không bao giờ bị trống)
+      // LỌC DANH SÁCH: Tất cả các sale đều lưu khi có tên (bỏ qua bất kỳ sale nào để trống tên)
+      var activeSalesList = [];
+      for (var sIdx = 0; sIdx < rawSalesList.length; sIdx++) {
+        var rawSale = rawSalesList[sIdx];
+        var rawName = (rawSale.salesRepName || rawSale.name || rawSale.reporter || "").toString().trim();
+        
+        // Tất cả các sale đều lưu khi có tên
+        if (rawName !== "") {
+          activeSalesList.push(rawSale);
+        }
+      }
+
+      // Nếu không có sale nào điền tên, lấy các sale có nhập số liệu hoặc dòng đầu
+      if (activeSalesList.length === 0) {
+        for (var sIdx2 = 0; sIdx2 < rawSalesList.length; sIdx2++) {
+          var rSale = rawSalesList[sIdx2];
+          if (rSale.visitedCount || rSale.ordersCount || rSale.volume || rSale.newCustomers || rSale.situation) {
+            activeSalesList.push(rSale);
+          }
+        }
+        if (activeSalesList.length === 0) {
+          activeSalesList = [rawSalesList[0]];
+        }
+      }
+
+      var rowsToSave = [];
+      for (var i = 0; i < activeSalesList.length; i++) {
+        var s = activeSalesList[i];
         var sName = (s.salesRepName && s.salesRepName.toString().trim() !== "") ? s.salesRepName.toString().trim()
           : (s.name && s.name.toString().trim() !== "") ? s.name.toString().trim()
           : (s.reporter && s.reporter.toString().trim() !== "") ? s.reporter.toString().trim()
@@ -108,8 +132,8 @@ function doPost(e) {
         var sVolume = s.volume ? String(s.volume).trim() : "";
         var sSituation = s.situation ? String(s.situation).trim() : "";
 
-        // Dòng dữ liệu cho từng sale (Sale 1 ghi kèm phần chung, các sale 2..5 để trống cột chung)
-        rows5.push([
+        // Dòng dữ liệu cho từng sale (Sale 1 ghi kèm phần chung, các sale 2..N để trống cột chung)
+        rowsToSave.push([
           nowTime,
           reportDate,
           sName,
@@ -125,8 +149,7 @@ function doPost(e) {
         ]);
       }
 
-      // --- GHI 5 DÒNG VÀO FILE THỨ 1 ---
-      // Tìm dòng dữ liệu thực tế cuối cùng để ghi ngay sau đó (tránh lỗi Google Sheets nhảy xuống dòng 1000)
+      // --- GHI VÀO FILE THỨ 1 ---
       var lastRow1 = sheet.getLastRow();
       var actualLastRow1 = 0;
       if (lastRow1 > 0) {
@@ -139,9 +162,22 @@ function doPost(e) {
         }
       }
       var targetRow1 = Math.max(actualLastRow1 + 1, (sheet.getLastRow() <= 2 ? 3 : actualLastRow1 + 1));
-      sheet.getRange(targetRow1, 1, rows5.length, 12).setValues(rows5);
+      
+      // Ghi dữ liệu
+      var recordRange1 = sheet.getRange(targetRow1, 1, rowsToSave.length, 12);
+      recordRange1.setValues(rowsToSave);
 
-      // --- GHI 5 DÒNG VÀO FILE THỨ 2 ---
+      // VẼ ĐƯỜNG BAO CHO ĐỢT NHẬP (Phân biệt với các lần nhập khác):
+      // - Dòng đầu tiên: top = true (kẻ viền trên màu đen)
+      // - Dòng cuối cùng: bottom = true (kẻ viền dưới màu đen)
+      // - Còn lại giữ nguyên: left = null, right = null, vertical = null, horizontal = null
+      recordRange1.setBorder(true, null, true, null, null, null, "#000000", SpreadsheetApp.BorderStyle.SOLID);
+      recordRange1.setVerticalAlignment("middle");
+      recordRange1.setWrap(true);
+      sheet.getRange(targetRow1, 1, rowsToSave.length, 2).setHorizontalAlignment("center");
+      sheet.getRange(targetRow1, 4, rowsToSave.length, 3).setHorizontalAlignment("center");
+
+      // --- GHI VÀO FILE THỨ 2 ---
       if (typeof SECOND_SPREADSHEET_ID !== "undefined" && SECOND_SPREADSHEET_ID && SECOND_SPREADSHEET_ID.trim() !== "") {
         try {
           var ss2 = SpreadsheetApp.openById(SECOND_SPREADSHEET_ID.trim());
@@ -195,7 +231,6 @@ function doPost(e) {
             sheet2.setFrozenRows(2);
           }
 
-          // Tìm dòng dữ liệu thực tế cuối cùng File 2
           var lastRow2 = sheet2.getLastRow();
           var actualLastRow2 = 0;
           if (lastRow2 > 0) {
@@ -208,7 +243,16 @@ function doPost(e) {
             }
           }
           var targetRow2 = Math.max(actualLastRow2 + 1, (sheet2.getLastRow() <= 2 ? 3 : actualLastRow2 + 1));
-          sheet2.getRange(targetRow2, 1, rows5.length, 12).setValues(rows5);
+          
+          var recordRange2 = sheet2.getRange(targetRow2, 1, rowsToSave.length, 12);
+          recordRange2.setValues(rowsToSave);
+
+          // VẼ ĐƯỜNG BAO CHO ĐỢT NHẬP FILE 2 (Tương tự File 1: dòng 1 top=true, dòng cuối bottom=true, còn lại giữ nguyên)
+          recordRange2.setBorder(true, null, true, null, null, null, "#000000", SpreadsheetApp.BorderStyle.SOLID);
+          recordRange2.setVerticalAlignment("middle");
+          recordRange2.setWrap(true);
+          sheet2.getRange(targetRow2, 1, rowsToSave.length, 2).setHorizontalAlignment("center");
+          sheet2.getRange(targetRow2, 4, rowsToSave.length, 3).setHorizontalAlignment("center");
 
         } catch (err2) {
           console.error("Lỗi khi ghi File 2 (BC QL kênh): " + err2);

@@ -28,8 +28,13 @@ export const ChannelManagerReportPreview = forwardRef<HTMLDivElement, ChannelMan
         })
       : '...';
 
-    // Tính tổng số điểm ghé của 5 sale
-    const totalVisited = data.sales.reduce((sum, s) => {
+    // Tất cả các sale đều lưu và báo cáo khi có tên
+    const activeSales = data.sales.filter((s) => Boolean(s.salesRepName && s.salesRepName.trim() !== ''));
+
+    const displaySales = activeSales.length > 0 ? activeSales : data.sales.slice(0, 3);
+
+    // Tính tổng số điểm ghé của các sale đang báo cáo
+    const totalVisited = displaySales.reduce((sum, s) => {
       const count = parseInt(s.visitedCount || '0', 10);
       return sum + (isNaN(count) ? 0 : count);
     }, 0);
@@ -52,7 +57,7 @@ export const ChannelManagerReportPreview = forwardRef<HTMLDivElement, ChannelMan
                 BÁO CÁO QUẢN LÝ KÊNH
               </h1>
               <p className="text-xs text-slate-500 font-medium">
-                Tổng hợp kết quả 5 NV Sale & Đánh giá công việc chung trong ngày
+                Tổng hợp kết quả {displaySales.length} NV Sale & Đánh giá công việc chung trong ngày
               </p>
             </div>
 
@@ -76,7 +81,7 @@ export const ChannelManagerReportPreview = forwardRef<HTMLDivElement, ChannelMan
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold px-2.5 py-1 bg-blue-50 text-blue-800 rounded-md border border-blue-200">
-                5 Nhân viên Sale
+                {displaySales.length} Nhân viên Sale
               </span>
               <span className="text-xs font-bold px-2.5 py-1 bg-emerald-50 text-emerald-800 rounded-md border border-emerald-200">
                 Tổng ghé: {totalVisited} điểm
@@ -85,53 +90,59 @@ export const ChannelManagerReportPreview = forwardRef<HTMLDivElement, ChannelMan
           </div>
         </div>
 
-        {/* BẢNG KẾT QUẢ CHĂM SÓC ĐIỂM BÁN CỦA 5 SALE */}
+        {/* BẢNG KẾT QUẢ CHĂM SÓC ĐIỂM BÁN (KẺ Ô RÕ RÀNG TỪNG RECORD) */}
         <div className="mb-5">
           <div className="text-xs font-black uppercase tracking-wider text-slate-800 mb-2 flex items-center justify-between">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-3.5 bg-emerald-600 rounded-xs"></span>
-              KẾT QUẢ CHĂM SÓC ĐIỂM BÁN (5 NV SALE)
+              KẾT QUẢ CHĂM SÓC ĐIỂM BÁN ({displaySales.length} NV SALE)
             </div>
             <span className="text-[10px] text-slate-500 font-semibold">
               Chi tiết từng nhân viên phụ trách
             </span>
           </div>
 
-          <div className="rounded-xl border border-slate-300 overflow-hidden shadow-2xs">
+          {/* Bảng kẻ ô từng record có viền phân cách xanh lá dưới đáy như Google Sheets */}
+          <div className="rounded-lg border-2 border-slate-300 overflow-hidden shadow-xs">
             <table className="w-full text-center border-collapse text-xs">
               <thead>
-                <tr className="bg-slate-100 text-slate-700 border-b border-slate-300 font-bold text-[10.5px]">
-                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-50/70 w-[5%] text-slate-800">STT</th>
-                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-50/70 w-[18%] text-left text-slate-900">Tên NV Sale</th>
-                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-50/70 w-[10%]">Số điểm ghé</th>
-                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-50/70 w-[18%] text-left">Khách hàng mới</th>
-                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-50/70 w-[11%]">Đơn hàng</th>
-                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-50/70 w-[16%]">Sản lượng</th>
-                  <th className="py-2.5 px-3 bg-emerald-50/70 w-[22%] text-left">Tình hình</th>
+                <tr className="bg-slate-100 text-slate-800 border-b-2 border-slate-300 font-bold text-[10.5px]">
+                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-100/70 w-[5%] text-slate-800">STT</th>
+                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-100/70 w-[18%] text-left text-slate-900">Tên NV Sale</th>
+                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-100/70 w-[10%]">Số điểm ghé</th>
+                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-100/70 w-[18%] text-left">Khách hàng mới</th>
+                  <th className="py-2.5 px-2 border-r border-slate-300 bg-emerald-100/70 w-[11%]">Đơn hàng</th>
+                  <th className="py-2.5 px-3 border-r border-slate-300 bg-emerald-100/70 w-[16%]">Sản lượng</th>
+                  <th className="py-2.5 px-3 bg-emerald-100/70 w-[22%] text-left">Tình hình</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200">
-                {data.sales.map((sale, idx) => (
-                  <tr key={sale.id} className={idx % 2 === 1 ? 'bg-slate-50/60' : 'bg-white'}>
-                    <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-slate-500">
+              <tbody className="divide-y divide-slate-300">
+                {displaySales.map((sale, idx) => (
+                  <tr 
+                    key={sale.id} 
+                    className={`border-b border-slate-300 ${
+                      idx === displaySales.length - 1 ? 'border-b-4 border-b-emerald-600' : ''
+                    } ${idx % 2 === 1 ? 'bg-slate-50/70' : 'bg-white'}`}
+                  >
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-bold text-slate-600">
                       {idx + 1}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-slate-200 text-left font-bold text-slate-900">
+                    <td className="py-2.5 px-3 border-r border-slate-300 text-left font-extrabold text-slate-900">
                       {sale.salesRepName || `Sale ${idx + 1}`}
                     </td>
-                    <td className="py-2.5 px-2 border-r border-slate-200 text-center font-black text-blue-700 text-sm">
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-black text-blue-700 text-sm">
                       {sale.visitedCount || '-'}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-slate-200 text-left text-[11px] leading-snug">
+                    <td className="py-2.5 px-3 border-r border-slate-300 text-left text-[11px] leading-snug text-slate-800">
                       {sale.newCustomers || '-'}
                     </td>
-                    <td className="py-2.5 px-2 border-r border-slate-200 text-center font-bold text-amber-700">
+                    <td className="py-2.5 px-2 border-r border-slate-300 text-center font-bold text-amber-700">
                       {sale.ordersCount || '-'}
                     </td>
-                    <td className="py-2.5 px-3 border-r border-slate-200 text-center font-bold text-indigo-700 text-[11px]">
+                    <td className="py-2.5 px-3 border-r border-slate-300 text-center font-bold text-indigo-700 text-[11px]">
                       {sale.volume || '-'}
                     </td>
-                    <td className="py-2.5 px-3 text-left text-[10.5px] leading-snug text-slate-700 whitespace-pre-line">
+                    <td className="py-2.5 px-3 text-left text-[10.5px] leading-snug text-slate-800 whitespace-pre-line">
                       {sale.situation || '-'}
                     </td>
                   </tr>

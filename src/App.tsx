@@ -43,37 +43,63 @@ export default function App() {
   const [modalFileName, setModalFileName] = useState<string>('BaoCao_QLKenh.png');
   const [isBlockedWarning, setIsBlockedWarning] = useState(false);
 
-  // Reset form Quản lý kênh: Xóa số liệu ngày hôm nay nhưng giữ lại tên Quản lý và tên 5 NV Sale
+  // Reset form Quản lý kênh: Xóa sạch toàn bộ dữ liệu bao gồm cả tên nhân viên, tên quản lý và số liệu
   const handleResetChannelForm = () => {
+    // 1. Xóa sạch bộ nhớ tạm localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('ql_kenh_manager_name');
+      localStorage.removeItem('ql_kenh_sales_rep');
+      for (let i = 1; i <= 50; i++) {
+        localStorage.removeItem(`ql_sale_rep_${i}`);
+      }
+    }
+
+    // 2. Tạo 5 sale mặc định hoàn toàn trống (xóa sạch toàn bộ tên và số liệu)
+    const empty5Sales = [1, 2, 3, 4, 5].map((id) => ({
+      id,
+      salesRepName: '',
+      visitedCount: '',
+      newCustomers: '',
+      ordersCount: '',
+      volume: '',
+      situation: '',
+    }));
+
+    // 3. Reset state trắng tinh
     setChannelData({
-      ...channelData,
-      sales: channelData.sales.map((s) => ({
-        ...s,
-        visitedCount: '',
-        newCustomers: '',
-        ordersCount: '',
-        volume: '',
-        situation: '',
-      })),
+      managerName: '',
+      date: new Date().toISOString().split('T')[0],
+      sales: empty5Sales,
       potentialCustomers: '',
       decliningRiskCustomers: '',
       marketIssues: '',
       proposal: '',
     });
+
     setExportSuccess(false);
+    setValidationError(null);
+    setSheetStatus('idle');
   };
 
   // Lưu Báo cáo Quản lý kênh vào Google Sheets (sheet "BC QL kênh" tại 2 file)
   const saveChannelReportToGoogleSheets = async (data: ChannelManagerReportData): Promise<boolean> => {
+    // TẤT CẢ CÁC SALE ĐỀU LƯU KHI CÓ TÊN (Bất kỳ sale nào có tên đều được lưu và báo cáo)
+    const activeSales = data.sales.filter((s) => Boolean(s.salesRepName && s.salesRepName.trim() !== ''));
+
+    if (activeSales.length === 0) {
+      setValidationError('Vui lòng nhập tên cho ít nhất 1 nhân viên Sale để lưu báo cáo!');
+      return false;
+    }
+
     const payload = {
       sheetName: "BC QL kênh",
       date: data.date,
       managerName: data.managerName ? data.managerName.trim() : '',
       reporter: data.managerName ? data.managerName.trim() : '',
-      // Tên gộp 5 sale làm fallback cho các script cũ
-      salesRepName: data.sales.map((s, idx) => (s.salesRepName && s.salesRepName.trim()) ? s.salesRepName.trim() : `Sale ${idx + 1}`).join(', '),
-      sales: data.sales.map((s, idx) => {
-        const cleanName = (s.salesRepName && s.salesRepName.trim()) ? s.salesRepName.trim() : `Sale ${idx + 1}`;
+      // Tên các sale được lưu
+      salesRepName: activeSales.map((s) => s.salesRepName.trim()).join(', '),
+      sales: activeSales.map((s, idx) => {
+        const cleanName = s.salesRepName.trim();
         return {
           id: s.id || idx + 1,
           salesRepName: cleanName,
@@ -239,6 +265,12 @@ export default function App() {
         el.focus();
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
+      return;
+    }
+
+    const namedSales = channelData.sales.filter((s) => Boolean(s.salesRepName && s.salesRepName.trim() !== ''));
+    if (namedSales.length === 0) {
+      setValidationError('Vui lòng nhập tên cho ít nhất 1 nhân viên Sale để xuất báo cáo!');
       return;
     }
 
@@ -421,28 +453,13 @@ export default function App() {
 
           {/* Cột phải: Xem trước phiếu chụp ảnh */}
           <div className="lg:col-span-5 lg:sticky lg:top-20 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-slate-800">
-                  Ảnh phiếu Quản lý kênh
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Mẫu xuất ảnh PNG gửi Zalo/báo cáo
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  id="preview-section-modal-button"
-                  type="button"
-                  onClick={handleOpenModalPreview}
-                  disabled={isExporting}
-                  className="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-md border border-slate-300 shadow-2xs transition-colors cursor-pointer"
-                  title="Mở ảnh dạng Popup để chạm giữ lưu vào máy"
-                >
-                  <Eye className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Mở popup</span>
-                </button>
-              </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800">
+                Ảnh phiếu Quản lý kênh
+              </h2>
+              <p className="text-xs text-slate-500">
+                Mẫu xuất ảnh PNG gửi Zalo/báo cáo
+              </p>
             </div>
             
             <div className="bg-slate-200/90 p-2 sm:p-3 rounded-xl overflow-x-auto shadow-inner border border-slate-300">

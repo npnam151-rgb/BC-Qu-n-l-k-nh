@@ -47,15 +47,15 @@ export function ReportForm({ data, onChange, onReset }: ReportFormProps) {
           </span>
         </div>
 
-        {/* Nút Reset form */}
+        {/* Nút Reset */}
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg border border-rose-200 transition-colors shadow-2xs cursor-pointer"
-          title="Xóa trắng toàn bộ dữ liệu của điểm này để nhập lại từ đầu"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg border border-slate-200 transition-colors shadow-2xs cursor-pointer"
+          title="Reset"
         >
-          <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-          <span>Reset form</span>
+          <RotateCcw className="w-3.5 h-3.5 text-slate-600" />
+          <span>Reset</span>
         </button>
       </div>
 
@@ -288,15 +288,15 @@ export function ReportForm({ data, onChange, onReset }: ReportFormProps) {
         </div>
       </div>
 
-      {/* Nút Reset form phụ ở chân biểu mẫu */}
+      {/* Nút Reset ở chân biểu mẫu */}
       <div className="flex justify-end pt-1">
         <button
           type="button"
           onClick={onReset}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+          className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" />
-          <span>Reset form (Xóa trắng để nhập điểm khác)</span>
+          <span>Reset</span>
         </button>
       </div>
     </div>
