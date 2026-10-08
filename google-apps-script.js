@@ -1,8 +1,6 @@
 // ============================================================================
 // CẤU HÌNH FILE THỨ 2 (LƯU ĐỒNG THỜI VÀO 2 FILE GOOGLE SHEETS)
 // Dán ID của file thứ 2 vào đây (chuỗi ký tự nằm giữa /d/ và /edit trên link của file 2)
-// Ví dụ: var SECOND_SPREADSHEET_ID = "1a2b3c4d5e6f7g8h9i...";
-// Nếu để trống "" thì script chỉ ghi vào file hiện tại.
 // ============================================================================
 var SECOND_SPREADSHEET_ID = "1S2epup9cDgckvmVCPUuWGcK55gLwY9jpfImT55pgLj0";
 
@@ -19,11 +17,13 @@ function doPost(e) {
     var spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = spreadsheet.getSheetByName(sheetName);
     
-    // Tìm kiếm sheet không phân biệt chữ hoa/thường
+    // Tìm kiếm sheet không phân biệt chữ hoa/thường và khoảng trắng thừa
     if (!sheet) {
       var sheets = spreadsheet.getSheets();
+      var cleanTarget = sheetName.trim().toLowerCase().replace(/\s+/g, " ");
       for (var s = 0; s < sheets.length; s++) {
-        if (sheets[s].getName().trim().toLowerCase() === sheetName.trim().toLowerCase()) {
+        var sName = sheets[s].getName().trim().toLowerCase().replace(/\s+/g, " ");
+        if (sName === cleanTarget || (cleanTarget.indexOf("ql k") !== -1 && sName.indexOf("ql k") !== -1)) {
           sheet = sheets[s];
           break;
         }
@@ -41,8 +41,9 @@ function doPost(e) {
     // XỬ LÝ THEO TỪNG LOẠI BẢNG
     // =========================================================================
 
-    // 0. BÁO CÁO QUẢN LÝ KÊNH (BC QL KÊNH - 12 CỘT CHUẨN FORM MẪU)
+    // 0. BÁO CÁO QUẢN LÝ KÊNH (BC QL KÊNH - 12 CỘT CHUẨN FORM MẪU CHO 5 SALE & PHẦN CHUNG)
     if (sheetName === "BC QL kênh" || sheetName === "BC QL Kênh" || sheetName === "BC Quản lý kênh" || sheetName === "BC quản lý kênh") {
+      // 1. Tạo tiêu đề chuẩn 12 cột cho File 1 nếu sheet mới
       if (sheet.getLastRow() === 0) {
         var headerRow1 = [
           "Thời gian gửi",
@@ -78,29 +79,87 @@ function doPost(e) {
         sheet.setFrozenRows(2);
       }
 
-      row.push(
-        new Date(),
-        data.date || "",
-        data.salesRepName || data.reporter || "",
-        data.visitedCount || "",
-        data.newCustomers || "",
-        data.ordersCount || "",
-        data.volume || "",
-        data.situation || "",
-        data.potentialCustomers || "",
-        data.decliningRiskCustomers || "",
-        data.marketIssues || "",
-        data.proposal || ""
-      );
+      var nowTime = new Date();
+      var reportDate = data.date || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+      var commonPotential = data.potentialCustomers || "";
+      var commonDeclining = data.decliningRiskCustomers || "";
+      var commonMarket = data.marketIssues || "";
+      var commonProposal = data.proposal || "";
 
-      // --- ĐỒNG THỜI GHI VÀO FILE THỨ 2 (NẾU CÓ CẤU HÌNH SECOND_SPREADSHEET_ID) ---
+      // Danh sách 5 sale gửi từ form quản lý
+      var salesList = (data.sales && Array.isArray(data.sales) && data.sales.length > 0)
+        ? data.sales
+        : (data.salesList && Array.isArray(data.salesList) && data.salesList.length > 0)
+          ? data.salesList
+          : [data];
+
+      var rows5 = [];
+      for (var i = 0; i < salesList.length; i++) {
+        var s = salesList[i];
+        // Đảm bảo luôn luôn có Tên NV Sale (không bao giờ bị trống)
+        var sName = (s.salesRepName && s.salesRepName.toString().trim() !== "") ? s.salesRepName.toString().trim()
+          : (s.name && s.name.toString().trim() !== "") ? s.name.toString().trim()
+          : (s.reporter && s.reporter.toString().trim() !== "") ? s.reporter.toString().trim()
+          : ("Sale " + (i + 1));
+
+        var sVisited = s.visitedCount !== undefined ? String(s.visitedCount).trim() : "";
+        var sNewCust = s.newCustomers ? String(s.newCustomers).trim() : "";
+        var sOrders = s.ordersCount ? String(s.ordersCount).trim() : "";
+        var sVolume = s.volume ? String(s.volume).trim() : "";
+        var sSituation = s.situation ? String(s.situation).trim() : "";
+
+        // Dòng dữ liệu cho từng sale (Sale 1 ghi kèm phần chung, các sale 2..5 để trống cột chung)
+        rows5.push([
+          nowTime,
+          reportDate,
+          sName,
+          sVisited,
+          sNewCust,
+          sOrders,
+          sVolume,
+          sSituation,
+          i === 0 ? commonPotential : "",
+          i === 0 ? commonDeclining : "",
+          i === 0 ? commonMarket : "",
+          i === 0 ? commonProposal : ""
+        ]);
+      }
+
+      // --- GHI 5 DÒNG VÀO FILE THỨ 1 ---
+      // Tìm dòng dữ liệu thực tế cuối cùng để ghi ngay sau đó (tránh lỗi Google Sheets nhảy xuống dòng 1000)
+      var lastRow1 = sheet.getLastRow();
+      var actualLastRow1 = 0;
+      if (lastRow1 > 0) {
+        var colA1 = sheet.getRange(1, 1, Math.min(lastRow1, 1000), 1).getValues();
+        for (var r1 = colA1.length - 1; r1 >= 0; r1--) {
+          if (colA1[r1][0] !== "" && colA1[r1][0] !== null && colA1[r1][0] !== undefined) {
+            actualLastRow1 = r1 + 1;
+            break;
+          }
+        }
+      }
+      var targetRow1 = Math.max(actualLastRow1 + 1, (sheet.getLastRow() <= 2 ? 3 : actualLastRow1 + 1));
+      sheet.getRange(targetRow1, 1, rows5.length, 12).setValues(rows5);
+
+      // --- GHI 5 DÒNG VÀO FILE THỨ 2 ---
       if (typeof SECOND_SPREADSHEET_ID !== "undefined" && SECOND_SPREADSHEET_ID && SECOND_SPREADSHEET_ID.trim() !== "") {
         try {
           var ss2 = SpreadsheetApp.openById(SECOND_SPREADSHEET_ID.trim());
           var sheet2 = ss2.getSheetByName("BC QL kênh") || ss2.getSheetByName("BC QL Kênh") || ss2.getSheetByName("BC Quản lý kênh");
           if (!sheet2) {
+            var sheets2 = ss2.getSheets();
+            for (var k = 0; k < sheets2.length; k++) {
+              var s2Name = sheets2[k].getName().trim().toLowerCase();
+              if (s2Name.indexOf("ql k") !== -1 || s2Name.indexOf("quản lý k") !== -1) {
+                sheet2 = sheets2[k];
+                break;
+              }
+            }
+          }
+          if (!sheet2) {
             sheet2 = ss2.insertSheet("BC QL kênh");
           }
+
           if (sheet2.getLastRow() === 0) {
             var hRow1_2 = [
               "Thời gian gửi",
@@ -135,33 +194,38 @@ function doPost(e) {
               .setVerticalAlignment("middle");
             sheet2.setFrozenRows(2);
           }
-          sheet2.appendRow([
-            new Date(),
-            data.date || "",
-            data.salesRepName || data.reporter || "",
-            data.visitedCount || "",
-            data.newCustomers || "",
-            data.ordersCount || "",
-            data.volume || "",
-            data.situation || "",
-            data.potentialCustomers || "",
-            data.decliningRiskCustomers || "",
-            data.marketIssues || "",
-            data.proposal || ""
-          ]);
+
+          // Tìm dòng dữ liệu thực tế cuối cùng File 2
+          var lastRow2 = sheet2.getLastRow();
+          var actualLastRow2 = 0;
+          if (lastRow2 > 0) {
+            var colA2 = sheet2.getRange(1, 1, Math.min(lastRow2, 1000), 1).getValues();
+            for (var r2 = colA2.length - 1; r2 >= 0; r2--) {
+              if (colA2[r2][0] !== "" && colA2[r2][0] !== null && colA2[r2][0] !== undefined) {
+                actualLastRow2 = r2 + 1;
+                break;
+              }
+            }
+          }
+          var targetRow2 = Math.max(actualLastRow2 + 1, (sheet2.getLastRow() <= 2 ? 3 : actualLastRow2 + 1));
+          sheet2.getRange(targetRow2, 1, rows5.length, 12).setValues(rows5);
+
         } catch (err2) {
           console.error("Lỗi khi ghi File 2 (BC QL kênh): " + err2);
         }
       }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        "status": "success",
+        "message": "Đã lưu 5 sale vào BC QL kênh tại cả 2 file"
+      })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 1. BÁO CÁO SALE SỈ (GIỮ NGUYÊN 100% THEO FILE HIỆN TẠI)
     else if (sheetName === "BC sale sỉ" || sheetName === "BC Sale sỉ" || sheetName === "BC Sale Sỉ") {
-      // KIỂM TRA ĐÂY LÀ APP MỚI (1 ĐIỂM BÁN) HAY APP CŨ (15 ĐIỂM BÁN)
       var isSingleVisitApp = (data.restaurantName !== undefined);
 
       if (isSingleVisitApp) {
-        // --- CHẾ ĐỘ MỚI: 1 RECORD CHO MỖI ĐIỂM BÁN ---
         if (sheet.getLastRow() === 0) {
           var headerRow1 = [
             "Thời gian gửi",
@@ -194,7 +258,6 @@ function doPost(e) {
           sheet.setFrozenRows(2);
         }
 
-        // Kiểm tra xem sheet 1 có cột "Điểm thứ mấy đi trong ngày" ở cột 4 hay không để ghi đúng cột
         var firstRowCol4 = sheet.getRange(1, 4).getValue();
         var secondRowCol4 = sheet.getLastRow() >= 2 ? sheet.getRange(2, 4).getValue() : "";
         var hasVisitOrderCol1 = (
@@ -237,13 +300,11 @@ function doPost(e) {
           );
         }
 
-        // --- ĐỒNG THỜI GHI VÀO FILE THỨ 2 (NẾU CÓ CẤU HÌNH SECOND_SPREADSHEET_ID) ---
         if (typeof SECOND_SPREADSHEET_ID !== "undefined" && SECOND_SPREADSHEET_ID && SECOND_SPREADSHEET_ID.trim() !== "") {
           try {
             var ss2 = SpreadsheetApp.openById(SECOND_SPREADSHEET_ID.trim());
             var sheet2 = ss2.getSheetByName("BC sale sỉ") || ss2.getSheetByName("BC Sale sỉ") || ss2.getSheets()[0];
             if (sheet2) {
-              // Tự động tính số thứ tự điểm đi trong ngày cho File 2 (cột 4)
               var autoVisitOrder2 = 1;
               var lastRow2 = sheet2.getLastRow();
               if (lastRow2 >= 3) {
@@ -297,16 +358,15 @@ function doPost(e) {
         }
 
       } else {
-        // --- CHẾ ĐỘ CŨ (15 ĐIỂM BÁN) - GIỮ NGUYÊN HOÀN TOÀN ĐỂ TƯƠNG THÍCH NGƯỢC ---
         if (sheet.getLastRow() === 0) {
           var headersSaleSi = [
-            "Thời gian gửi",            // Cột A
-            "Ngày",                     // Cột B
-            "Người báo cáo",            // Cột C
-            "Điểm mở mới",              // Cột D
-            "Phát sinh/ Đề xuất",       // Cột E
-            "Tổng số điểm đến chăm sóc", // Cột F
-            "Tổng số đơn đặt hàng"      // Cột G
+            "Thời gian gửi",
+            "Ngày",
+            "Người báo cáo",
+            "Điểm mở mới",
+            "Phát sinh/ Đề xuất",
+            "Tổng số điểm đến chăm sóc",
+            "Tổng số đơn đặt hàng"
           ];
           for (var i = 1; i <= 15; i++) {
             headersSaleSi.push("Điểm bán số " + i);
@@ -403,30 +463,20 @@ function doPost(e) {
       }
     }
 
-    // 5. BÁO CÁO TQL (6 CƠ SỞ - PHƯƠNG ÁN 1: 38 CỘT CHUẨN) (GIỮ NGUYÊN 100%)
+    // 5. BÁO CÁO TQL (GIỮ NGUYÊN 100%)
     else if (sheetName === "BC TQL" || sheetName === "BC TQL 1" || sheetName === "Sheet17") {
       if (sheet.getLastRow() === 0) {
         var headersTQL = [
           "Thời gian gửi", "Ngày", "Người báo cáo",
-          // ĐÁNH GIÁ CHUNG TOÀN CHUỖI (7 cột - chỉ dòng đầu tiên 01 DD có giá trị)
           "DT toàn hệ thống:", "Mục tiêu ngày:", "Tăng/giảm so với hôm trc:", "Tổng lượt khách:", "Số bàn phục vụ:", "DT TB/khách:", "Xếp hạng DT:",
-          // CH lv chính (Đưa về sau Đánh giá chung toàn chuỗi theo Phương án 1)
           "CH lv chính",
-          // PHỤC VỤ (8 cột)
           "Xếp bàn và đón tiếp:", "Order & tư vấn món:", "Chăm sóc KH & upsell:", "Tốc độ ra đồ:", "Chương trình KM:", "Vệ sinh:", "Vđ phát sinh:", "Cách giải quyết ps:",
-          // NHÂN SỰ (5 cột)
           "Tổng NS bàn đi làm:", "NS nghỉ đột xuất:", "NS nghỉ hẳn:", "NS mới:", "NS hỗ trợ:",
-          // BIA (4 cột)
           "Phản hồi của khách:", "Vđ phát sinh:", "Cách giải quyết ps:", "Xuất bán tiệc:",
-          // MÓN ĂN (5 cột)
           "Món đẩy:", "Món bán chạy:", "Phản hồi của khách:", "Vđ phát sinh:", "Cách giải quyết ps:",
-          // SỬA CHỮA (2 cột)
           "Hỏng hóc cần sửa:", "Hạng mục sửa trong ngày:",
-          // ĐÀO TẠO (1 cột)
           "Đào tạo:",
-          // ĐỐI NGOẠI (1 cột)
           "Đối ngoại:",
-          // Ý KIẾN KHÁC (1 cột - thuộc phần Chung toàn chuỗi, đặt ở cuối)
           "Ý KIẾN KHÁC"
         ];
         sheet.appendRow(headersTQL);
@@ -440,12 +490,7 @@ function doPost(e) {
 
       if (data.storesList && Array.isArray(data.storesList) && data.storesList.length > 0) {
         data.storesList.forEach(function(st) {
-          var storeRow = [
-            timeVal,
-            dateVal,
-            reporterVal
-          ];
-          
+          var storeRow = [timeVal, dateVal, reporterVal];
           if (st.systemValues && Array.isArray(st.systemValues)) {
             st.systemValues.forEach(function(val) {
               storeRow.push(val !== undefined && val !== null ? String(val) : "");
@@ -453,9 +498,7 @@ function doPost(e) {
           } else {
             for (var s = 0; s < 7; s++) storeRow.push("");
           }
-          
           storeRow.push(st.storeCode || st.storeName || "");
-          
           if (st.storeValues && Array.isArray(st.storeValues)) {
             st.storeValues.forEach(function(val) {
               storeRow.push(val !== undefined && val !== null ? String(val) : "");
@@ -467,9 +510,7 @@ function doPost(e) {
           } else {
             for (var stc = 0; stc < 26; stc++) storeRow.push("");
           }
-
           storeRow.push(st.otherOpinionValue !== undefined && st.otherOpinionValue !== null ? String(st.otherOpinionValue) : "");
-
           sheet.appendRow(storeRow);
         });
       } else if (data.stores) {
@@ -489,7 +530,6 @@ function doPost(e) {
         storeCodes.forEach(function(code, idx) {
           var storeVals = data.stores[code] || {};
           var storeRow = [timeVal, dateVal, reporterVal];
-          
           systemKeys.forEach(function(k) {
             if (idx === 0) {
               var val = sysVals[k] !== undefined ? sysVals[k] : (storeVals[k] !== undefined ? storeVals[k] : "");
@@ -498,19 +538,15 @@ function doPost(e) {
               storeRow.push("");
             }
           });
-
           storeRow.push(code);
-
           storeKeys.forEach(function(k) {
             storeRow.push(storeVals[k] !== undefined ? String(storeVals[k]) : "");
           });
-
           if (idx === 0) {
             storeRow.push(sysVals.y_kien_khac ? String(sysVals.y_kien_khac) : "");
           } else {
             storeRow.push("");
           }
-
           sheet.appendRow(storeRow);
         });
       } else if (data.items && Array.isArray(data.items)) {
@@ -548,13 +584,11 @@ function doPost(e) {
       }
       
       row.push(new Date(), data.location, data.date || "", data.reporter || "");
-      
       if (data.items && data.items.length > 0) {
         data.items.forEach(function(item) {
           if (item.id === 201 || item.id === 202 || item.id === 204) {
             var val = (item.value || "").trim();
             var separatorIndex = val.search(/[\\.\\,\\-\\n]/);
-            
             if (separatorIndex !== -1 && separatorIndex < 15) { 
                var answer = val.substring(0, separatorIndex).trim();
                var explanation = val.substring(separatorIndex + 1).trim();
@@ -571,12 +605,11 @@ function doPost(e) {
       }
     }
 
-    // 7. BÁO CÁO VẬN HÀNH (BC Vận hành) - 22 CỘT CHUẨN (A -> V) (GIỮ NGUYÊN 100%)
+    // 7. BÁO CÁO VẬN HÀNH (GIỮ NGUYÊN 100%)
     else if (sheetName === "BC Vận hành" || sheetName === "BC vận hành") {
       if (sheet.getLastRow() === 0) {
         var row1 = ["", "", "", "", "NHÂN SỰ", "", "", "", "", "", "SỬA CHỮA", "", "KINH DOANH", "", "", "", "", "", "", "", "", ""];
         sheet.appendRow(row1);
-        
         sheet.getRange("E1:J1").mergeAcross().setHorizontalAlignment("center").setFontWeight("bold").setBackground("#fff2cc");
         sheet.getRange("K1:L1").mergeAcross().setHorizontalAlignment("center").setFontWeight("bold").setBackground("#ffe599");
         sheet.getRange("M1:V1").mergeAcross().setHorizontalAlignment("center").setFontWeight("bold").setBackground("#fff2cc");
@@ -590,10 +623,8 @@ function doPost(e) {
           "Phát sinh bất thường trong ngày", "Đề xuất"
         ];
         sheet.appendRow(row2);
-        
         var headerRange = sheet.getRange("A2:V2");
         headerRange.setFontWeight("bold").setHorizontalAlignment("center").setVerticalAlignment("middle").setWrap(true);
-        
         sheet.getRange("A1:A2").merge().setVerticalAlignment("middle").setHorizontalAlignment("center").setFontWeight("bold");
         sheet.getRange("B1:B2").merge().setVerticalAlignment("middle").setHorizontalAlignment("center").setFontWeight("bold");
         sheet.getRange("C1:C2").merge().setVerticalAlignment("middle").setHorizontalAlignment("center").setFontWeight("bold");
@@ -614,10 +645,8 @@ function doPost(e) {
       sheet.appendRow(row);
     }
     
-    return ContentService.createTextOutput(JSON.stringify({"status": "success"}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
   } catch(error) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": error.toString()})).setMimeType(ContentService.MimeType.JSON);
   }
 }

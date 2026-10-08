@@ -22,10 +22,10 @@ const GOOGLE_SHEET_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxWKIm
 export default function App() {
   // Dữ liệu Báo cáo Quản lý kênh
   const [channelData, setChannelData] = useState<ChannelManagerReportData>(() => {
-    const savedRep = typeof window !== 'undefined' 
-      ? localStorage.getItem('ql_kenh_sales_rep') || localStorage.getItem('sale_si_reporter') || '' 
+    const savedManager = typeof window !== 'undefined' 
+      ? localStorage.getItem('ql_kenh_manager_name') || localStorage.getItem('ql_kenh_sales_rep') || '' 
       : '';
-    return createDefaultChannelReport(savedRep);
+    return createDefaultChannelReport(savedManager);
   });
 
   // Trạng thái xuất báo cáo & lưu Sheets
@@ -43,11 +43,22 @@ export default function App() {
   const [modalFileName, setModalFileName] = useState<string>('BaoCao_QLKenh.png');
   const [isBlockedWarning, setIsBlockedWarning] = useState(false);
 
-  // Reset form Quản lý kênh
+  // Reset form Quản lý kênh: Xóa số liệu ngày hôm nay nhưng giữ lại tên Quản lý và tên 5 NV Sale
   const handleResetChannelForm = () => {
     setChannelData({
-      ...createDefaultChannelReport(channelData.salesRepName),
-      date: channelData.date,
+      ...channelData,
+      sales: channelData.sales.map((s) => ({
+        ...s,
+        visitedCount: '',
+        newCustomers: '',
+        ordersCount: '',
+        volume: '',
+        situation: '',
+      })),
+      potentialCustomers: '',
+      decliningRiskCustomers: '',
+      marketIssues: '',
+      proposal: '',
     });
     setExportSuccess(false);
   };
@@ -57,12 +68,24 @@ export default function App() {
     const payload = {
       sheetName: "BC QL kênh",
       date: data.date,
-      salesRepName: data.salesRepName ? data.salesRepName.trim() : '',
-      visitedCount: data.visitedCount ? String(data.visitedCount).trim() : '',
-      newCustomers: data.newCustomers ? data.newCustomers.trim() : '',
-      ordersCount: data.ordersCount ? data.ordersCount.trim() : '',
-      volume: data.volume ? data.volume.trim() : '',
-      situation: data.situation ? data.situation.trim() : '',
+      managerName: data.managerName ? data.managerName.trim() : '',
+      reporter: data.managerName ? data.managerName.trim() : '',
+      // Tên gộp 5 sale làm fallback cho các script cũ
+      salesRepName: data.sales.map((s, idx) => (s.salesRepName && s.salesRepName.trim()) ? s.salesRepName.trim() : `Sale ${idx + 1}`).join(', '),
+      sales: data.sales.map((s, idx) => {
+        const cleanName = (s.salesRepName && s.salesRepName.trim()) ? s.salesRepName.trim() : `Sale ${idx + 1}`;
+        return {
+          id: s.id || idx + 1,
+          salesRepName: cleanName,
+          name: cleanName,
+          reporter: cleanName,
+          visitedCount: s.visitedCount ? String(s.visitedCount).trim() : '',
+          newCustomers: s.newCustomers ? s.newCustomers.trim() : '',
+          ordersCount: s.ordersCount ? s.ordersCount.trim() : '',
+          volume: s.volume ? s.volume.trim() : '',
+          situation: s.situation ? s.situation.trim() : '',
+        };
+      }),
       potentialCustomers: data.potentialCustomers ? data.potentialCustomers.trim() : '',
       decliningRiskCustomers: data.decliningRiskCustomers ? data.decliningRiskCustomers.trim() : '',
       marketIssues: data.marketIssues ? data.marketIssues.trim() : '',
@@ -192,8 +215,8 @@ export default function App() {
       if (!dataUrl) throw new Error('Không thể tạo ảnh');
 
       const dateStr = channelData.date || new Date().toISOString().split('T')[0];
-      const cleanRep = channelData.salesRepName ? channelData.salesRepName.trim().replace(/\s+/g, '_') : 'NVSale';
-      const fileName = `BaoCao_QLKenh_${cleanRep}_${dateStr}.png`;
+      const cleanManager = channelData.managerName ? channelData.managerName.trim().replace(/\s+/g, '_') : 'QuanLy';
+      const fileName = `BaoCao_QLKenh_${cleanManager}_${dateStr}.png`;
 
       setModalImageUrl(dataUrl);
       setModalFileName(fileName);
@@ -209,9 +232,9 @@ export default function App() {
 
   // Xuất báo cáo (Tạo ảnh & Lưu Google Sheets)
   const handleExportReport = async () => {
-    if (!channelData.salesRepName.trim()) {
-      setValidationError('Vui lòng nhập "Tên NV Sale" trước khi xuất báo cáo!');
-      const el = document.getElementById('sales-rep-name-input');
+    if (!channelData.managerName.trim()) {
+      setValidationError('Vui lòng nhập "Tên Quản lý kênh" trước khi xuất báo cáo!');
+      const el = document.getElementById('manager-name-input');
       if (el) {
         el.focus();
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -231,8 +254,8 @@ export default function App() {
       if (!dataUrl) throw new Error('Không thể tạo ảnh');
 
       const dateStr = channelData.date || new Date().toISOString().split('T')[0];
-      const cleanRep = channelData.salesRepName.trim().replace(/\s+/g, '_');
-      const fileName = `BaoCao_QLKenh_${cleanRep}_${dateStr}.png`;
+      const cleanManager = channelData.managerName.trim().replace(/\s+/g, '_');
+      const fileName = `BaoCao_QLKenh_${cleanManager}_${dateStr}.png`;
 
       setModalImageUrl(dataUrl);
       setModalFileName(fileName);
